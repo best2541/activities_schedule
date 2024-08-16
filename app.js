@@ -22,61 +22,101 @@ app.use(express.json({ extended: false }))
 schedule.scheduleJob('0 * * * * *', () => {
     knex('REMIND')
         .select('*')
-        // .havingNotNull('day_frequency')
-        .where('hour_frequency', new Date().getHours())
-        .andWhere('minute_frequency', new Date().getMinutes())
-        .andWhere('routine', 1)
-        .orWhere(function() {
-            this.where('hour_frequency', new Date().getHours())
-                .andWhere('minute_frequency', new Date().getMinutes())
-                .andWhere('routine', 0)
+        .where(function () {
+            this.where('routine', 1)
+                .andWhere('hour_frequency', new Date().getHours())
+                .andWhere('minute_frequency',new Date().getMinutes())
+                .andWhere(function () {
+                    this.where(function () {
+                        this.where('date_frequency', new Date().getDate())
+                            .andWhere(function () {
+                                this.where('day_frequency', new Date().getDay()+1).orWhere('day_frequency', 0)
+                            })
+                    }).orWhere(function () {
+                        this.where('day_frequency', new Date().getDay()+1)
+                            .andWhere(function () {
+                                this.where('date_frequency', new Date().getDate()).orWhere('date_frequency', 0)
+                            })
+                    }).orWhere(function () {
+                        this.where('date_frequency', 0)
+                            .andWhere('day_frequency', 0)
+                    })
+                })
+        })
+        .orWhere(function () {
+            this.where('routine', 0)
                 .andWhere('sended', 0)
+                .andWhere('hour_frequency', new Date().getHours())
+                .andWhere(function () {
+                    this.where(function () {
+                        this.where('date_frequency', new Date().getDate())
+                            .andWhere(function () {
+                                this.where('day_frequency', new Date().getDay()).orWhereNull('day_frequency')
+                            });
+                    }).orWhere(function () {
+                        this.where('day_frequency', new Date().getDay())
+                            .andWhere(function () {
+                                this.where('date_frequency', new Date().getDate()).orWhereNull('date_frequency')
+                            })
+                    }).orWhere(function () {
+                        this.where('date_frequency', 0)
+                            .andWhere('day_frequency', 0)
+                    })
+                })
         })
         .then(result => {
             result?.map(x => {
                 console.log(x)
-                // axios.post('https://api.line.me/v2/bot/message/push', {
-                //     "to": x?.user_id,
-                //     "messages": [{
-                //         "type": "text",
-                //         "text": x?.topic
-                //     }]
-                // }, {
-                //     headers: {
-                //         Authorization: `Bearer ${process.env.lineToken}`
-                //     }
-                // }).then(() => console.log('send msg'))
+                axios.post('https://api.line.me/v2/bot/message/push', {
+                    "to": x?.user_id,
+                    "messages": [{
+                        "type": "text",
+                        "text": x?.topic
+                    }]
+                }, {
+                    headers: {
+                        Authorization: `Bearer ${process.env.lineToken}`
+                    }
+                }).then(() => console.log('send msg'))
             })
+        })
+        .finally(() => {
+            knex('REMIND')
+                .update({ sended: 1 })
+                .where({ routine: 0, sended: 0 })
+                .then(() => {
+                    console.log('sended updated')
+                })
         })
 })
 
-schedule.scheduleJob('0 0 0 0 0 *', () => {
-    const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"]
+// schedule.scheduleJob('0 0 0 0 0 *', () => {
+//     const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"]
 
-    const today = new Date()
-    const dayOfWeek = days[today.getDay()]
+//     const today = new Date()
+//     const dayOfWeek = days[today.getDay()]
 
-    knex('REMIND')
-        .select('*')
-        .whereRaw("frequency NOT REGEXP '^[0-9]+$'")
-        .then(result => {
-            result?.map(x => {
-                if (x.frequency.includes(dayOfWeek)) {
-                    axios.post('https://api.line.me/v2/bot/message/push', {
-                        "to": x?.user_id,
-                        "messages": [{
-                            "type": "text",
-                            "text": x?.topic
-                        }]
-                    }, {
-                        headers: {
-                            Authorization: `Bearer ${process.env.lineToken}`
-                        }
-                    }).then(() => console.log('send msg'))
-                }
-            })
-        })
-})
+//     knex('REMIND')
+//         .select('*')
+//         .whereRaw("frequency NOT REGEXP '^[0-9]+$'")
+//         .then(result => {
+//             result?.map(x => {
+//                 if (x.frequency.includes(dayOfWeek)) {
+//                     axios.post('https://api.line.me/v2/bot/message/push', {
+//                         "to": x?.user_id,
+//                         "messages": [{
+//                             "type": "text",
+//                             "text": x?.topic
+//                         }]
+//                     }, {
+//                         headers: {
+//                             Authorization: `Bearer ${process.env.lineToken}`
+//                         }
+//                     }).then(() => console.log('send msg'))
+//                 }
+//             })
+//         })
+// })
 
 // const job = schedule.scheduleJob('1 * * * * *', function () {
 //     try {
